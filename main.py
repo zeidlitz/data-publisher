@@ -17,7 +17,7 @@ def get_sentiment(label):
 
 def update_metrics(data):
     for entry in data:
-        sentiment = get_sentiment(data["sentiment"])
+        sentiment = get_sentiment(entry["sentiment"])
         labels = ({entry["category"], entry["source"], entry["subsource"]})
         if labels not in gauges:
             gauges[labels] = Gauge(
