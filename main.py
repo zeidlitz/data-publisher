@@ -1,6 +1,7 @@
 import time
 import logging
 import json
+import pdb
 from prometheus_client import Gauge, start_http_server
 
 gauges = set()
@@ -27,6 +28,7 @@ def update_metrics(data):
             labels = (category, entry["source"], entry["subsource"])
             if labels not in gauges:
                 gauges.add(labels)
+            pdb.set_trace()
             sentiment_gauge.labels(labels).inc(sentiment)
 
 def load_data():
