@@ -1,14 +1,15 @@
+from _typeshed import sentinel
 import time
 import logging
 import json
 from prometheus_client import Gauge, start_http_server
 
-metrics = {}
+gauges = {}
 
 DATA_SOURCE = "data.json"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-def get_label_value(label):
+def get_sentiment(label):
     if label == "POSITIVE":
         return 1
     if label == "NEGATIVE":
@@ -17,15 +18,15 @@ def get_label_value(label):
 
 def update_metrics(data):
     for entry in data:
-        value = get_label_value(entry["label"])
-        for category in entry["category"]:
-            if category not in metrics:
-                try:
-                    m = Gauge(f"{category.replace(' ', '_').lower()}", f"Sentiment for {category}")
-                    metrics[category] = m
-                except ValueError:
-                    continue
-            metrics[category].inc(value)
+        sentiment = get_sentiment(data["label"])
+        labels = ({entry["category"], entry["source"], entry["subsource"]})
+        if labels not in gauges:
+            gauges[labels] = Gauge(
+                    "sentiment",
+                    "sentiment for given category in source",
+                    ["category", "source", "subsource"]
+                    )
+        gauges[labels].labels(*labels).inc(sentiment)
 
 def load_data():
     with open(DATA_SOURCE, "r", encoding="utf-8") as f:
