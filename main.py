@@ -15,14 +15,18 @@ def get_sentiment(label):
         return -1
     return 0
 
+def get_valid_prometheous_gauge_name(text):
+    return text.replace("%", "percent")
+
 def update_metrics(data):
     for entry in data:
         sentiment = get_sentiment(entry["sentiment"])
         for category in entry["category"]:
             labels = (category, entry["source"], entry["subsource"])
             if labels not in gauges:
+                c = get_valid_prometheous_gauge_name(category)
                 gauges[labels] = Gauge(
-                        f"sentiment_{category}",
+                        f"sentiment_{c}",
                         "sentiment for given category in source",
                         ["category", "source", "subsource"]
                         )
