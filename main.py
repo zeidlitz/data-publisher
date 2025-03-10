@@ -18,14 +18,15 @@ def get_sentiment(label):
 def update_metrics(data):
     for entry in data:
         sentiment = get_sentiment(entry["sentiment"])
-        labels = (tuple(entry["category"]), entry["source"], entry["subsource"])
-        if labels not in gauges:
-            gauges[labels] = Gauge(
-                    "sentiment",
-                    "sentiment for given category in source",
-                    ["category", "source", "subsource"]
-                    )
-        gauges[labels].labels(*labels).inc(sentiment)
+        for category in entry["category"]:
+            labels = (category, entry["source"], entry["subsource"])
+            if labels not in gauges:
+                gauges[labels] = Gauge(
+                        f"{category}",
+                        "sentiment for given category in source",
+                        ["category", "source", "subsource"]
+                        )
+            gauges[labels].labels(*labels).inc(sentiment)
 
 def load_data():
     with open(DATA_SOURCE, "r", encoding="utf-8") as f:
