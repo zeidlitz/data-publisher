@@ -22,7 +22,7 @@ def update_metrics(data):
             labels = (category, entry["source"], entry["subsource"])
             if labels not in gauges:
                 gauges[labels] = Gauge(
-                        "sentiment",
+                        f"sentiment_{category}",
                         "sentiment for given category in source",
                         ["category", "source", "subsource"]
                         )
