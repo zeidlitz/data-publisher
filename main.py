@@ -16,7 +16,7 @@ def get_sentiment(label):
     return 0
 
 def get_valid_prometheous_gauge_name(text):
-    return text.replace("%", "percent").replace("+","plus").replace("/","_")
+    return text.replace("%", "percent").replace("+","plus").replace("/","_").replace("-","_")
 
 def update_metrics(data):
     for entry in data:
