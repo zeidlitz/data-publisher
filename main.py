@@ -16,7 +16,7 @@ def get_sentiment(label):
     return 0
 
 def get_valid_prometheous_gauge_name(text):
-    return text.replace("%", "percent")
+    return text.replace("%", "percent").replace("+","plus")
 
 def update_metrics(data):
     for entry in data:
@@ -25,6 +25,7 @@ def update_metrics(data):
             labels = (category, entry["source"], entry["subsource"])
             if labels not in gauges:
                 c = get_valid_prometheous_gauge_name(category)
+                # Really need to think about how to do this. I don't want to stop producing metrics if one bad category name gets through. Maybe a try/catch caluse can solve it.
                 gauges[labels] = Gauge(
                         f"sentiment_{c}",
                         "sentiment for given category in source",
