@@ -1,4 +1,3 @@
-from _typeshed import sentinel
 import time
 import logging
 import json
