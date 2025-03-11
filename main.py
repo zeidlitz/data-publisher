@@ -15,6 +15,8 @@ CONSUMER_GROUP = os.getenv("CONSUMER_GROUP ","data_publisher")
 CONSUMER_NAME = os.getenv("CONSUMER_NAME","publisher")
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+METRICS_HOST = os.getenv('METRICS_HOST', 'localhost')
+METRICS_PORT = int(os.getenv("METRICS_PORT", 8000))
 
 gauges = set()
 sentiment_gauge = Gauge(
@@ -34,6 +36,7 @@ def get_sentiment(label):
     return 0
 
 def update_metrics(data):
+    logging.info("Publishing metrics")
     for entry in data:
         sentiment = get_sentiment(entry["sentiment"])
         for category in entry["category"]:
@@ -43,6 +46,7 @@ def update_metrics(data):
             if labels not in gauges:
                 gauges.add(labels)
             sentiment_gauge.labels(category, source, subsource).inc(sentiment)
+    logging.info("Publishing complete")
 
 def consume_stream():
     while True:
@@ -59,12 +63,11 @@ def consume_stream():
             print(f"Error: {e}")
 
 def main():
-    start_http_server(8000)
+    logging.info(f"Publishing metrics to {METRICS_HOST}:{METRICS_PORT}")
+    start_http_server(METRICS_PORT)
     while True:
-        logging.info("update_metrics")
         data = consume_stream()
         update_metrics(data)
-        time.sleep(120)
 
 if __name__ == "__main__":
     main()
