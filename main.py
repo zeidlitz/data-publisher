@@ -27,6 +27,13 @@ sentiment_gauge = Gauge(
 
 redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
+def create_redis_consumer_group():
+    try:
+        logging.info(f"Creating consumer group {CONSUMER_GROUP} for {CONSUMER_STREAM}")
+        redis_client.xgroup_create(CONSUMER_STREAM, CONSUMER_GROUP, id='0', mkstream=True)
+    except Exception as e:
+        logging.info(f"Exception {e}")
+        pass
 
 def get_sentiment(label):
     if label == "POSITIVE":
@@ -63,6 +70,7 @@ def consume_stream():
             print(f"Error: {e}")
 
 def main():
+    create_redis_consumer_group()
     logging.info(f"Publishing metrics to {METRICS_HOST}:{METRICS_PORT}")
     start_http_server(METRICS_PORT)
     while True:
