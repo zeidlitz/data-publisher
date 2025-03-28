@@ -1,22 +1,27 @@
-import os
-import time
+import yaml
 import logging
 import json
 import redis
 
-from dotenv import load_dotenv
 from prometheus_client import Gauge, start_http_server
 
-load_dotenv()
+CONFIG_PATH = "/etc/data-publisher/config.yaml"
+
+def load_config(path):
+    with open(path, "r") as file:
+        return yaml.safe_load(file)
+
+config = load_config(CONFIG_PATH)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-CONSUMER_STREAM = os.getenv("CONSUMER_STREAM", "data_analysis")
-CONSUMER_GROUP = os.getenv("CONSUMER_GROUP ","data_publisher")
-CONSUMER_NAME = os.getenv("CONSUMER_NAME","publisher")
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-METRICS_HOST = os.getenv('METRICS_HOST', 'localhost')
-METRICS_PORT = int(os.getenv("METRICS_PORT", 8000))
+CONSUMER_STREAM = config.get("consumer_stream", "data_analysis")
+CONSUMER_GROUP = config.get("consumer_group ","data_publisher")
+CONSUMER_NAME = config.get("consumer_name","publisher")
+REDIS_HOST = config.get('redis_host', 'localhost')
+REDIS_PORT = config.get("redis_port", 6379)
+METRICS_HOST = config.get('metrics_host', 'localhost')
+METRICS_PORT = config.get("metrics_port", 8000)
 
 gauges = set()
 sentiment_gauge = Gauge(
