@@ -6,6 +6,7 @@ import redis
 from prometheus_client import Gauge, start_http_server
 
 CONFIG_PATH = "/etc/data-publisher/config.yaml"
+VERSION_FILE = "VERSION"
 
 def load_config(path):
     with open(path, "r") as file:
@@ -27,7 +28,7 @@ gauges = set()
 sentiment_gauge = Gauge(
         f"sentiment_analysis",
         "sentiment for given category in source",
-        ["category", "source", "subsource"]
+        ["category", "source", "subsource", "posted_in"]
         )
 
 redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
@@ -54,10 +55,11 @@ def update_metrics(data):
         for category in entry["category"]:
             source = entry["source"]
             subsource = entry["subsource"]
+            posted_in = entry["posted_in"]
             labels = (category, source, subsource)
             if labels not in gauges:
                 gauges.add(labels)
-            sentiment_gauge.labels(category, source, subsource).inc(sentiment)
+            sentiment_gauge.labels(category, source, subsource, posted_in).inc(sentiment)
     logging.info("Publishing complete")
 
 def consume_stream():
@@ -74,7 +76,13 @@ def consume_stream():
         except Exception as e:
             print(f"Error: {e}")
 
+def get_version():
+    with open("VERSION") as f:
+        return f.read().strip()
+
 def main():
+    __version__ = get_version()
+    logging.info(f"Running version {__version__}")
     create_redis_consumer_group()
     logging.info(f"Publishing metrics to {METRICS_HOST}:{METRICS_PORT}")
     start_http_server(METRICS_PORT)
