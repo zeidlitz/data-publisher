@@ -71,7 +71,9 @@ def update_trends(data):
     logging.info("Updateing trend gauge...")
     for entry in data:
         posted_in = entry["posted_in"]
-        trends_gauge.labels(posted_in).inc(1)
+        source = entry["source"]
+        subsource = entry["subsource"]
+        trends_gauge.labels(posted_in, source, subsource).inc(1)
 
 def consume_stream():
     while True:
