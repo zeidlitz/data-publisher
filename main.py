@@ -28,7 +28,7 @@ gauges = set()
 sentiment_gauge = Gauge(
         f"sentiment_analysis",
         "sentiment for given category in source",
-        ["category", "source", "subsource", "posted_in"]
+        ["category", "source", "subsource","body", "posted_in"]
         )
 
 redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
@@ -55,11 +55,12 @@ def update_metrics(data):
         for category in entry["category"]:
             source = entry["source"]
             subsource = entry["subsource"]
+            body = entry["body"]
             posted_in = entry["posted_in"]
             labels = (category, source, subsource)
             if labels not in gauges:
                 gauges.add(labels)
-            sentiment_gauge.labels(category, source, subsource, posted_in).inc(sentiment)
+            sentiment_gauge.labels(category, source, subsource, body, posted_in).inc(sentiment)
     logging.info("Publishing complete")
 
 def consume_stream():
