@@ -24,11 +24,16 @@ REDIS_PORT = config.get("redis_port", 6379)
 METRICS_HOST = config.get('metrics_host', 'localhost')
 METRICS_PORT = config.get("metrics_port", 8000)
 
-gauges = set()
 sentiment_gauge = Gauge(
         f"sentiment_analysis",
         "sentiment for given category in source",
-        ["category", "source", "subsource", "posted_in"]
+        ["category", "source", "subsource"]
+        )
+
+trends_gauge = Gauge(
+        f"trends",
+        "Popular topics discussed",
+        ["posted_in", "source", "subsource"]
         )
 
 redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
@@ -49,18 +54,24 @@ def get_sentiment(label):
     return 0
 
 def update_metrics(data):
-    logging.info("Publishing metrics")
+    update_sentiment_analysis(data)
+    update_trends(data)
+    logging.info("All metrics updated")
+
+def update_sentiment_analysis(data):
+    logging.info("Updateing sentiment gauge...")
     for entry in data:
         sentiment = get_sentiment(entry["sentiment"])
         for category in entry["category"]:
             source = entry["source"]
             subsource = entry["subsource"]
-            posted_in = entry["posted_in"]
-            labels = (category, source, subsource)
-            if labels not in gauges:
-                gauges.add(labels)
-            sentiment_gauge.labels(category, source, subsource, posted_in).inc(sentiment)
-    logging.info("Publishing complete")
+            sentiment_gauge.labels(category, source, subsource).inc(sentiment)
+
+def update_trends(data):
+    logging.info("Updateing trend gauge...")
+    for entry in data:
+        posted_in = entry["posted_in"]
+        trends_gauge.labels(posted_in).inc(1)
 
 def consume_stream():
     while True:
