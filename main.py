@@ -3,7 +3,7 @@ import logging
 import json
 import redis
 
-from prometheus_client import Gauge, start_http_server
+from prometheus_client import Gauge, Counter, start_http_server
 
 CONFIG_PATH = "/etc/data-publisher/config.yaml"
 VERSION_FILE = "VERSION"
@@ -24,11 +24,16 @@ REDIS_PORT = config.get("redis_port", 6379)
 METRICS_HOST = config.get('metrics_host', 'localhost')
 METRICS_PORT = config.get("metrics_port", 8000)
 
-gauges = set()
 sentiment_gauge = Gauge(
         f"sentiment_analysis",
-        "sentiment for given category in source",
-        ["category", "source", "subsource","body", "posted_in"]
+        "Sentiment analysis and extracted categories from a source",
+        ["category", "source", "subsource"]
+        )
+
+trends_counter = Counter(
+        f"trends",
+        "Counts trending topics",
+        ["category", "source", "posted_in"]
         )
 
 redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
@@ -49,19 +54,25 @@ def get_sentiment(label):
     return 0
 
 def update_metrics(data):
-    logging.info("Publishing metrics")
+    update_sentiment_gauge(data)
+    update_trends_gauge(data)
+
+def update_sentiment_gauge(data):
+    logging.info("Updating sentiment_analysis gauge")
     for entry in data:
         sentiment = get_sentiment(entry["sentiment"])
         for category in entry["category"]:
             source = entry["source"]
             subsource = entry["subsource"]
-            body = entry["body"]
-            posted_in = entry["posted_in"]
-            labels = (category, source, subsource)
-            if labels not in gauges:
-                gauges.add(labels)
-            sentiment_gauge.labels(category, source, subsource, body, posted_in).inc(sentiment)
-    logging.info("Publishing complete")
+            sentiment_gauge.labels(category, source, subsource).inc(sentiment)
+
+def update_trends_gauge(data):
+    logging.info("Updating trends gauge")
+    for entry in data:
+        source = entry["source"]
+        subsource = entry["subsource"]
+        posted_in = entry["posted_in"]
+        trends_counter.labels(source, subsource, posted_in).inc()
 
 def consume_stream():
     while True:
