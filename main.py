@@ -1,4 +1,3 @@
-from ast import parse
 import yaml
 import sys
 import logging
