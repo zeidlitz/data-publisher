@@ -1,28 +1,16 @@
+from ast import parse
 import yaml
+import sys
 import logging
 import json
 import redis
 
 from prometheus_client import Gauge, Counter, start_http_server
+from importlib.metadata import version, PackageNotFoundError
 
-CONFIG_PATH = "/etc/data-publisher/config.yaml"
-VERSION_FILE = "VERSION"
-
-def load_config(path):
-    with open(path, "r") as file:
-        return yaml.safe_load(file)
-
-config = load_config(CONFIG_PATH)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-CONSUMER_STREAM = config.get("consumer_stream", "data_analysis")
-CONSUMER_GROUP = config.get("consumer_group ","data_publisher")
-CONSUMER_NAME = config.get("consumer_name","publisher")
-REDIS_HOST = config.get('redis_host', 'localhost')
-REDIS_PORT = config.get("redis_port", 6379)
-METRICS_HOST = config.get('metrics_host', 'localhost')
-METRICS_PORT = config.get("metrics_port", 8000)
 
 sentiment_gauge = Gauge(
         f"sentiment_analysis",
@@ -36,12 +24,36 @@ trends_counter = Counter(
         ["category", "source", "posted_in"]
         )
 
-redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+class ParseException(Exception):
+    pass
 
-def create_redis_consumer_group():
+def parse_args():
+    args = sys.argv
+    nrArgs = len(args)
+    if nrArgs == 1:
+        return "config.yaml"
+    if nrArgs > 2:
+        raise ParseException(
+            f"too many input arguments, recieved {nrArgs} need exactlly one. Recieved: {args[1:]}"
+        )
+    return args[1]
+
+def get_version():
+    __version__ = "unknown"
     try:
-        logging.info(f"Creating consumer group {CONSUMER_GROUP} for {CONSUMER_STREAM}")
-        redis_client.xgroup_create(CONSUMER_STREAM, CONSUMER_GROUP, id='0', mkstream=True)
+        __version__ = version("data-extraction")
+    except PackageNotFoundError:
+        logging.warning("could not read pacakge version, ensure project is installed properly")
+    return __version__
+
+def load_config(path):
+    with open(path, "r") as file:
+        return yaml.safe_load(file)
+
+def create_redis_consumer_group(redis_client, consumer_group, consumer_stream, _id, mkstream):
+    try:
+        logging.info(f"creating consumer group {consumer_group} for {consumer_stream}")
+        redis_client.xgroup_create(consumer_stream, consumer_group, id=_id, mkstream=mkstream)
     except Exception as e:
         logging.info(f"Exception {e}")
         pass
@@ -74,32 +86,38 @@ def update_trends_gauge(data):
         posted_in = entry["posted_in"]
         trends_counter.labels(source, subsource, posted_in).inc()
 
-def consume_stream():
+def consume_stream(redis_client, consumer_group, consumer_name, consumer_stream):
     while True:
         try:
-            messages = redis_client.xreadgroup(CONSUMER_GROUP, CONSUMER_NAME, {CONSUMER_STREAM: '>'}, count=1, block=5000)
-            logging.info(f"Consuming messages from {CONSUMER_STREAM}")
+            messages = redis_client.xreadgroup(consumer_group, consumer_name, {consumer_stream: '>'}, count=1, block=5000)
+            logging.info(f"consuming messages from {consumer_stream}")
             if messages:
                 logging.info(f"Message received!")
-                for stream, message_list in messages:
+                for _, message_list in messages:
                     for message_id, message in message_list:
-                        redis_client.xack(CONSUMER_STREAM, CONSUMER_GROUP, message_id)
+                        redis_client.xack(consumer_stream, consumer_group, message_id)
                         return json.loads(message['data'])
         except Exception as e:
             print(f"Error: {e}")
 
-def get_version():
-    with open("VERSION") as f:
-        return f.read().strip()
-
 def main():
     __version__ = get_version()
     logging.info(f"Running version {__version__}")
-    create_redis_consumer_group()
-    logging.info(f"Publishing metrics to {METRICS_HOST}:{METRICS_PORT}")
-    start_http_server(METRICS_PORT)
+    config_path = parse_args()
+    config = load_config(config_path)
+    consumer_stream = config.get("consumer_stream", "data_analysis")
+    consumer_group = config.get("consumer_group ","data_publisher")
+    consumer_name = config.get("consumer_name","publisher")
+    redis_host = config.get('redis_host', 'localhost')
+    redis_port = config.get("redis_port", 6379)
+    metrics_host = config.get('metrics_host', 'localhost')
+    metrics_port = config.get("metrics_port", 8000)
+    redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+    create_redis_consumer_group(redis_client, consumer_group, consumer_stream, 0, True)
+    logging.info(f"publishing metrics to {metrics_host}:{metrics_port}")
+    start_http_server(metrics_port)
     while True:
-        data = consume_stream()
+        data = consume_stream(redis_client, consumer_group, consumer_name, consumer_stream)
         update_metrics(data)
 
 if __name__ == "__main__":
