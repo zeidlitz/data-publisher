@@ -24,7 +24,7 @@ type DuckDbClient struct {
 
 func New(cfg config.Config) (DuckDbClient, error) {
 	var client DuckDbClient
-	connector, err := duckdb.NewConnector(cfg.ConnectionPath, nil)
+	connector, err := duckdb.NewConnector(cfg.DuckDbConn, nil)
 	if err != nil {
 		return client, err
 	}
@@ -41,7 +41,7 @@ func New(cfg config.Config) (DuckDbClient, error) {
 	}
 
 	client.db = db
-	slog.Info("database initialized successfully", "path", cfg.ConnectionPath)
+	slog.Info("database initialized successfully", "path", cfg.DuckDbConn)
 	return client, nil
 }
 
