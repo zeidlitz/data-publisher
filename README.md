@@ -2,9 +2,11 @@
 
 data publishing service that acts as a logical middle layer service between a messaging layer (redis) and a storage layer (duckdb)
 
+```
 ┌─────┐  ┌──────────────┐  ┌──────┐ 
 │redis│<-│data-publisher│->│duckdb│ 
 └─────┘  └──────────────┘  └──────┘ 
+```
 
 this service is not agnostic to the message and storage layer
 
