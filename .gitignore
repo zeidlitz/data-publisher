@@ -177,3 +177,6 @@ cython_debug/
 *-data.json
 data.json
 config.yaml
+
+# persistent storage folder 
+data/
