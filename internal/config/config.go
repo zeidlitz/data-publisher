@@ -27,12 +27,12 @@ func New() (Config, error) {
 
 	redisStream, found := os.LookupEnv("REDIS_STREAM")
 	if !found {
-		redisStream = "analysis_results"
+		redisStream = "data_analysis"
 	}
 
 	redisGroup, found := os.LookupEnv("REDIS_GROUP")
 	if !found {
-		redisGroup = "data_publisher"
+		redisGroup = "data_analysis"
 	}
 
 	redisConsumer, found := os.LookupEnv("REDIS_CONSUMER")

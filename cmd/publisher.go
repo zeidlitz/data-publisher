@@ -21,19 +21,26 @@ func main() {
 	cfg, err := config.New()
 	if err != nil {
 		slog.Error("failed to create config", "err", err)
+		os.Exit(1)
 	}
 
 	db, err := database.New(cfg)
 	if err != nil {
-		slog.Error("faield to connect to database", "conn", cfg.DuckDbConn, "err", err)
+		slog.Warn("database initialization", "conn", cfg.DuckDbConn, "err", err)
+		os.Exit(1)
 	}
 
 	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
+	ctx := context.Background()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	worker := worker.NewWorker(db, redisClient, cfg)
+	if err := worker.EnsureGroup(ctx); err != nil {
+		slog.Error("could not bootstrap Redis group", "error", err)
+		os.Exit(1)
+	}
 
 	slog.Info("data-publisher running", "version", version)
 

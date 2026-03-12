@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/duckdb/duckdb-go/v2"
-	_ "github.com/duckdb/duckdb-go/v2"
 	"github.com/zeidlitz/data-publisher/internal/config"
 	"github.com/zeidlitz/data-publisher/internal/models"
 )
@@ -33,7 +32,6 @@ func New(cfg config.Config) (DuckDbClient, error) {
 	if err := db.Ping(); err != nil {
 		return client, fmt.Errorf("could not ping database %w", err)
 	}
-	defer db.Close()
 
 	err = runMigrations(db)
 	if err != nil {
@@ -77,39 +75,44 @@ func (c *DuckDbClient) BatchInsert(ctx context.Context, results []models.Analysi
 
 	conn, err := c.db.Conn(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get connection: %w", err)
 	}
 	defer conn.Close()
 
-	err = conn.Raw(func(driverConn any) error {
-		nativeConn := driverConn.(*duckdb.Conn)
+	return conn.Raw(func(driverConn any) error {
+		nativeConn, ok := driverConn.(*duckdb.Conn)
+		if !ok {
+			return fmt.Errorf("invalid driver connection type")
+		}
 
 		appender, err := duckdb.NewAppenderFromConn(nativeConn, "", "sentiment_analysis")
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to create appender: %w", err)
 		}
 		defer appender.Close()
 
 		for _, res := range results {
-			createdAt := time.Unix(res.UnixTimestamp, 0)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				createdAt := time.Unix(res.UnixTimestamp, 0)
 
-			err := appender.AppendRow(
-				nil,
-				createdAt,
-				res.Subreddit,
-				res.Title,
-				res.Body,
-				res.Categories,
-				res.Sentiment,
-				res.UnixTimestamp,
-			)
-			if err != nil {
-				return fmt.Errorf("append error: %w", err)
+				if err := appender.AppendRow(
+					createdAt,
+					res.Subreddit,
+					res.Title,
+					res.Body,
+					res.Categories,
+					res.Sentiment,
+					res.UnixTimestamp,
+				); err != nil {
+					return fmt.Errorf("append error at subreddit %s: %w", res.Subreddit, err)
+				}
 			}
 		}
 
+		slog.Info("flushing to database")
 		return appender.Flush()
 	})
-
-	return err
 }

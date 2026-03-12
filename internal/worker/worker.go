@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -18,7 +19,7 @@ type Worker struct {
 	rdb           *redis.Client
 	streamName    string
 	groupName     string
-	consumerID    string
+	consumerId    string
 	batchSize     int
 	flushInterval time.Duration
 }
@@ -29,7 +30,7 @@ func NewWorker(db database.DuckDbClient, rdb *redis.Client, cfg config.Config) *
 		rdb:           rdb,
 		streamName:    cfg.RedisStream,
 		groupName:     cfg.RedisGroup,
-		consumerID:    cfg.RedisConsumer,
+		consumerId:    cfg.RedisConsumer,
 		batchSize:     500,
 		flushInterval: 5 * time.Second,
 	}
@@ -40,7 +41,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	ticker := time.NewTicker(w.flushInterval)
 	defer ticker.Stop()
 
-	slog.Info("Starting Redis stream processor")
+	slog.Info("starting redis stream processor")
 
 	for {
 		select {
@@ -50,7 +51,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		case <-ticker.C:
 			if len(buffer) > 0 {
 				if err := w.flush(ctx, buffer); err != nil {
-					slog.Error("Failed to flush batch on ticker", "error", err)
+					slog.Error("failed to flush batch on ticker", "error", err)
 					continue
 				}
 				buffer = buffer[:0]
@@ -59,14 +60,14 @@ func (w *Worker) Run(ctx context.Context) error {
 		default:
 			streams, err := w.rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    w.groupName,
-				Consumer: w.consumerID,
+				Consumer: w.consumerId,
 				Streams:  []string{w.streamName, ">"},
 				Count:    10,
 				Block:    1 * time.Second,
 			}).Result()
 
 			if err != nil && err != redis.Nil {
-				slog.Error("Redis read error", "error", err)
+				slog.Error("redis read error", "error", err)
 				continue
 			}
 
@@ -75,7 +76,7 @@ func (w *Worker) Run(ctx context.Context) error {
 					var protoMsg analytics.AnalysisResult
 					data := []byte(msg.Values["data"].(string))
 					if err := proto.Unmarshal(data, &protoMsg); err != nil {
-						slog.Error("Unmarshal error", "msg_id", msg.ID)
+						slog.Error("unmarshal error", "msg_id", msg.ID)
 						continue
 					}
 
@@ -94,7 +95,7 @@ func (w *Worker) Run(ctx context.Context) error {
 
 					if len(buffer) >= w.batchSize {
 						if err := w.flush(ctx, buffer); err != nil {
-							slog.Error("Batch insert failed", "error", err)
+							slog.Error("batch insert failed", "error", err)
 						}
 						buffer = buffer[:0]
 					}
@@ -108,6 +109,21 @@ func (w *Worker) flush(ctx context.Context, data []models.AnalysisResult) error 
 	if len(data) == 0 {
 		return nil
 	}
-	slog.Debug("Flushing batch to DuckDB", "count", len(data))
+	slog.Debug("flushing batch to DuckDB", "count", len(data))
 	return w.db.BatchInsert(ctx, data)
+}
+
+func (w *Worker) EnsureGroup(ctx context.Context) error {
+	err := w.rdb.XGroupCreateMkStream(ctx, w.streamName, w.groupName, "$").Err()
+
+	if err != nil {
+		if err.Error() == "BUSYGROUP Consumer Group name already exists" {
+			slog.Debug("consumer group already exists", "group", w.groupName)
+			return nil
+		}
+		return fmt.Errorf("failed to create consumer group: %w", err)
+	}
+
+	slog.Info("created new consumer group", "group", w.groupName, "stream", w.streamName)
+	return nil
 }
