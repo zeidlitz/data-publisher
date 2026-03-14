@@ -36,8 +36,30 @@ func NewWorker(db database.DuckDbClient, rdb *redis.Client, cfg config.Config) *
 	}
 }
 
+type TopicStats struct {
+	Topic    string
+	Date     string
+	Positive int
+	Negative int
+}
+
+type BatchBuffer struct {
+	Results    []models.AnalysisResult
+	Topics     map[string]struct{}
+	DailyStats map[string]*TopicStats
+}
+
+func NewBatchBuffer(size int) *BatchBuffer {
+	return &BatchBuffer{
+		Results:    make([]models.AnalysisResult, 0, size),
+		Topics:     make(map[string]struct{}),
+		DailyStats: make(map[string]*TopicStats),
+	}
+}
+
 func (w *Worker) Run(ctx context.Context) error {
 	buffer := make([]models.AnalysisResult, 0, w.batchSize)
+	messageIDs := make([]string, 0, w.batchSize)
 	ticker := time.NewTicker(w.flushInterval)
 	defer ticker.Stop()
 
@@ -46,16 +68,11 @@ func (w *Worker) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return w.flush(context.Background(), buffer)
+			w.flush(context.Background(), &buffer, &messageIDs)
+			return nil
 
 		case <-ticker.C:
-			if len(buffer) > 0 {
-				if err := w.flush(ctx, buffer); err != nil {
-					slog.Error("failed to flush batch on ticker", "error", err)
-					continue
-				}
-				buffer = buffer[:0]
-			}
+			w.flush(ctx, &buffer, &messageIDs)
 
 		default:
 			streams, err := w.rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
@@ -90,13 +107,12 @@ func (w *Worker) Run(ctx context.Context) error {
 					}
 
 					buffer = append(buffer, res)
+					messageIDs = append(messageIDs, msg.ID)
 
 					w.rdb.XAck(ctx, w.streamName, w.groupName, msg.ID)
 
 					if len(buffer) >= w.batchSize {
-						if err := w.flush(ctx, buffer); err != nil {
-							slog.Error("batch insert failed", "error", err)
-						}
+						w.flush(ctx, &buffer, &messageIDs)
 						buffer = buffer[:0]
 					}
 				}
@@ -105,12 +121,29 @@ func (w *Worker) Run(ctx context.Context) error {
 	}
 }
 
-func (w *Worker) flush(ctx context.Context, data []models.AnalysisResult) error {
-	if len(data) == 0 {
-		return nil
+func (w *Worker) flush(ctx context.Context, buffer *[]models.AnalysisResult, ids *[]string) {
+	if len(*buffer) == 0 {
+		return
 	}
-	slog.Debug("flushing batch to DuckDB", "count", len(data))
-	return w.db.BatchInsert(ctx, data)
+
+	slog.Info("flusing", "messages", len(*buffer))
+	var err error
+
+	err = w.db.InsertAnalysisResults(ctx, *buffer)
+	if err != nil {
+		slog.Warn("failed to insert analysis results", "err", err)
+	}
+
+	err = w.db.InsertTopics(ctx, *buffer)
+	if err != nil {
+		slog.Warn("failed to insert topics", "err", err)
+	}
+
+	if len(*ids) > 0 {
+		w.rdb.XAck(ctx, w.streamName, w.groupName, (*ids)...)
+	}
+	*buffer = (*buffer)[:0]
+	*ids = (*ids)[:0]
 }
 
 func (w *Worker) EnsureGroup(ctx context.Context) error {

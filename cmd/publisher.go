@@ -24,19 +24,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	db, err := database.New(cfg)
+	ctx := context.Background()
+	db, err := database.New(ctx, cfg)
 	if err != nil {
 		slog.Warn("database initialization", "conn", cfg.DuckDbConn, "err", err)
 		os.Exit(1)
 	}
+	// defer db.Conn.Close()
 
 	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
-	ctx := context.Background()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	worker := worker.NewWorker(db, redisClient, cfg)
+	worker := worker.NewWorker(*db, redisClient, cfg)
 	if err := worker.EnsureGroup(ctx); err != nil {
 		slog.Error("could not bootstrap Redis group", "error", err)
 		os.Exit(1)
