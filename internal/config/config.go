@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -10,6 +11,9 @@ type Config struct {
 	RedisStream   string
 	RedisGroup    string
 	RedisConsumer string
+	ServerHost    string
+	ServerPort    string
+	ServerAddr    string
 }
 
 func New() (Config, error) {
@@ -40,12 +44,25 @@ func New() (Config, error) {
 		redisConsumer = "publisher"
 	}
 
+	serverHost, found := os.LookupEnv("SERVER_HOST")
+	if !found {
+		serverHost = "localhost"
+	}
+
+	serverPort, found := os.LookupEnv("SERVER_PORT")
+	if !found {
+		serverPort = "8080"
+	}
+
 	config = Config{
 		DuckDbConn:    duckDbConn,
 		RedisAddr:     redisAddr,
 		RedisStream:   redisStream,
 		RedisGroup:    redisGroup,
 		RedisConsumer: redisConsumer,
+		ServerHost:    serverHost,
+		ServerPort:    serverPort,
+		ServerAddr:    fmt.Sprintf("%s:%s", serverHost, serverPort),
 	}
 
 	return config, nil
