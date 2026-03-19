@@ -1,7 +1,7 @@
 CREATE TYPE IF NOT EXISTS sentiment_type AS ENUM ('POSITIVE', 'NEGATIVE');
 
 CREATE TABLE IF NOT EXISTS analysis_results (
-    date DATE NOT NULL,
+    date TIMESTAMPTZ NOT NULL,
     subreddit VARCHAR,
     title VARCHAR,
     body TEXT,

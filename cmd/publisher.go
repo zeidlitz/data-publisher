@@ -5,9 +5,11 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/zeidlitz/data-publisher/internal/api"
 	"github.com/zeidlitz/data-publisher/internal/config"
 	"github.com/zeidlitz/data-publisher/internal/database"
 	"github.com/zeidlitz/data-publisher/internal/worker"
@@ -30,7 +32,6 @@ func main() {
 		slog.Warn("database initialization", "conn", cfg.DuckDbConn, "err", err)
 		os.Exit(1)
 	}
-	// defer db.Conn.Close()
 
 	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
 
@@ -43,11 +44,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.Info("data-publisher running", "version", version)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := worker.Run(ctx); err != nil {
+			slog.Error("worker failed", "err", err)
+		}
+	}()
 
-	if err := worker.Run(ctx); err != nil {
-		slog.Error("exiting", "err", err)
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := api.Serve(cfg, *db, ctx); err != nil {
+			slog.Error("api failed", "err", err)
+		}
+	}()
 
+	wg.Wait()
 	slog.Info("shutting down")
 }
