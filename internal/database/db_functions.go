@@ -22,7 +22,6 @@ func (c *DuckDbClient) InsertAnalysisResults(ctx context.Context, results []mode
 	}
 	defer stmt.Close()
 	for _, result := range results {
-		// date := time.Unix(result.UnixTimestamp, 0).Format("2006-01-02")
 		date := result.UnixTimestamp
 		_, err := stmt.ExecContext(ctx, date, result.Subreddit, result.Title, result.Body, result.Categories, result.Sentiment)
 		if err != nil {
@@ -52,7 +51,6 @@ func (c *DuckDbClient) InsertTopics(ctx context.Context, results []models.Analys
 	defer stmt.Close()
 
 	for _, res := range results {
-		// date := time.Unix(res.UnixTimestamp, 0).Format("2006-01-02")
 		date := res.UnixTimestamp
 		pos, neg := 0, 0
 		if res.Sentiment == "POSITIVE" {
