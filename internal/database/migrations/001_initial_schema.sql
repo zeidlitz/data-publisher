@@ -10,8 +10,9 @@ CREATE TABLE IF NOT EXISTS analysis_results (
 );
 
 CREATE TABLE IF NOT EXISTS daily_topics (
-  topic VARCHAR,
   date DATE,
+  subreddit VARCHAR,
+  topic VARCHAR,
   positive_count INTEGER DEFAULT 0,
   negative_count INTEGER DEFAULT 0,
   total_mentions INTEGER AS (positive_count + negative_count),

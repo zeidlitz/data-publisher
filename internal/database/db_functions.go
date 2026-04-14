@@ -39,8 +39,8 @@ func (c *DuckDbClient) InsertTopics(ctx context.Context, results []models.Analys
 	defer tx.Rollback()
 
 	stmt, err := tx.PrepareContext(ctx, `
-        INSERT INTO daily_topics (topic, date, positive_count, negative_count)
-        VALUES (?, date_trunc('day', to_timestamp(?)), ?, ?)
+        INSERT INTO daily_topics (date, subreddit, topic, positive_count, negative_count)
+        VALUES (date_trunc('day', to_timestamp(?)), ?, ?, ?, ?)
         ON CONFLICT (topic, date) DO UPDATE SET
             positive_count = daily_topics.positive_count + EXCLUDED.positive_count,
             negative_count = daily_topics.negative_count + EXCLUDED.negative_count;
@@ -52,6 +52,7 @@ func (c *DuckDbClient) InsertTopics(ctx context.Context, results []models.Analys
 
 	for _, res := range results {
 		date := res.UnixTimestamp
+		subreddit := res.Subreddit
 		pos, neg := 0, 0
 		if res.Sentiment == "POSITIVE" {
 			pos = 1
@@ -59,8 +60,8 @@ func (c *DuckDbClient) InsertTopics(ctx context.Context, results []models.Analys
 			neg = 1
 		}
 
-		for _, cat := range res.Categories {
-			if _, err := stmt.ExecContext(ctx, cat, date, pos, neg); err != nil {
+		for _, topic := range res.Categories {
+			if _, err := stmt.ExecContext(ctx, date, subreddit, topic, date, pos, neg); err != nil {
 				return err
 			}
 		}
