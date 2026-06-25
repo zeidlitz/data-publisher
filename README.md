@@ -1,6 +1,6 @@
 ## data publisher 
 
-data publishing service that acts as a logical middle layer service between a messaging layer (redis) and a storage layer (duckdb)
+A data publishing service that acts as a logical middle layer between a messaging layer (Redis) and a storage layer (DuckDB)
 
 ```
 ┌─────┐  ┌──────────────┐  ┌──────┐ 
